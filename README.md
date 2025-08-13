@@ -120,16 +120,18 @@ __Note:__ Attaching a double click will increase the delay for detecting a singl
 | Function                | Default    | Description                                                   |
 | ----------------------- | ---------- | ------------------------------------------------------------- |
 | `OB_SetDebounceMs(int)` | `50 ms`  | Period of time in which to ignore additional level changes.   |
+| `OB_SetDebounceEnabled(bool)` | `true` | Enable/disable debouncing entirely.   |
 | `OB_SetClickMs(int)`    | `400 ms` | Timeout used to distinguish single clicks from double clicks. |
 | `OB_SetPressMs(int)`    | `800 ms` | Duration to hold a button to trigger a long press.            |
 | `OB_SetIdleMs(int)`    | `1000 ms` | Duration of inactivity to consider the button idle.            |
-| `OB_SetLongPressMs(int)` | `0 ms` | Duration to hold a button to trigger a long press.            |
+| `OB_SetLongPressMs(int)` | `0 ms` | Duration between repeated long press events (0 = disabled).   |
+| `OB_SetMaxClicks(int)` | `100` | Maximum number of clicks for multi-click detection.            |
 
 You may change these default values but be aware that when you specify too short times it is hard to click twice or you will create a long press instead of a click.
 
-Set debounce (ms) to a negative value to only debounce on release. `OB_SetDebounceMs(-25);` will immediately update to a pressed state, and will debounce for 25ms going into the released state. This will expedite the `OB_EV_PRESS` event callback function to run instantly.
+Use `OB_SetDebounceEnabled(false)` to disable debouncing entirely for very fast response times. This replaces the previous negative debounce_ms usage.
 
-Note that long press is not activated by default as it will mask other button functions.
+Note that long press is not activated by default as it will mask other button functions. The long press interval defaults to 0ms which disables repeated callbacks during long press.
 
 ### Additional Functions
 
@@ -138,7 +140,7 @@ Note that long press is not activated by default as it will mask other button fu
 | Function                | Description                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------ |
 | `OB_IsLongPressed(const OneButton_t* btn)` | Detect whether or not the button is currently inside a long press.             |
-| `OB_GetPressedMs(const OneButton_t* btn)` | Get the current number of (ms) that the button has been held down for. |
+| `OB_GetPressedMs(const OneButton_t* btn)` | Get the current number of (ms) that the button has been held down for. Returns uint32_t for full range. |
 | `OB_GetPin(const OneButton_t* btn)` | Get the button pin                                                          |
 | `OB_GetState(const OneButton_t* btn)` | Get the button state                                                        |
 | `OB_GetDebouncedValue(const OneButton_t* btn)` | Get the debounced button value                                              |
@@ -146,6 +148,15 @@ Note that long press is not activated by default as it will mask other button fu
 ### `OB_Reset()`
 
 If you wish to reset the internal state of your buttons, call `OB_Reset()`.
+
+## Concurrency and Thread Safety
+
+This library is designed for single-threaded usage in a cooperative multitasking environment. Key considerations:
+
+- **Do not call `OB_Tick()` from within callback functions** - this can cause state corruption
+- The library includes a reentrancy guard to prevent recursive calls
+- If using in a multi-threaded environment, external synchronization (mutex, etc.) is required
+- All callback functions are invoked from within the `OB_Tick()` call
 
 ## Troubleshooting
 
