@@ -111,7 +111,8 @@ bool OB_Debounce(OneButton_t* btn, bool btnActive) {
 }
 
 void OB_Tick(OneButton_t* btn) {
-    if (!btn || btn->pin == INVALID_PIN) return;
+    if (!btn) return;
+    if (btn->pin == INVALID_PIN) return;
     
     // Reentrancy guard - do not allow recursive calls to OB_Tick
     if (btn->inTick) return;
