@@ -28,6 +28,7 @@
 #define DEFAULT_PRESS_MS               800
 #define DEFAULT_IDLE_MS                1000
 #define DEFAULT_LONG_PRESS_INTERVAL_MS 0
+#define DEFAULT_MAX_CLICKS_MULTI       100
 
 // Callback type
 typedef void (*OneButtonCallback)(void);
@@ -48,7 +49,7 @@ typedef struct {
   uint16_t pin;
  
   //Intervals
-  int16_t debounce_ms;
+  uint16_t debounce_ms;
   uint16_t click_ms;
   uint16_t press_ms;
   uint16_t idle_ms;
@@ -56,6 +57,8 @@ typedef struct {
   // State machine
   OneButtonState state;
   bool idleState;
+  bool debounceEnabled;
+  bool inTick; // Reentrancy guard
 
   //Levels
   uint8_t buttonPressedLevel;
@@ -110,17 +113,19 @@ bool OB_IsIdle(const OneButton_t* btn);
 bool OB_IsLongPressed(const OneButton_t* btn);
 
 // Setter functions for intervals
-void OB_SetDebounceMs(OneButton_t* btn, int16_t ms);
+void OB_SetDebounceMs(OneButton_t* btn, uint16_t ms);
+void OB_SetDebounceEnabled(OneButton_t* btn, bool enabled);
 void OB_SetClickMs(OneButton_t* btn, uint16_t ms);
 void OB_SetPressMs(OneButton_t* btn, uint16_t ms);
 void OB_SetIdleMs(OneButton_t* btn, uint16_t ms);
 void OB_SetLongPressIntervalMs(OneButton_t* btn, uint16_t ms);
+void OB_SetMaxClicks(OneButton_t* btn, uint16_t maxClicks);
 
 // Replace all individual attach function prototypes with this single function
 bool OB_AttachCallback(OneButton_t* btn, OneButtonEvent event, OneButtonCallback cb);
 
 // Getter functions
-uint16_t OB_GetPressedMs(const OneButton_t* btn);
+uint32_t OB_GetPressedMs(const OneButton_t* btn);
 uint16_t OB_GetPin(const OneButton_t* btn);
 OneButtonState OB_GetState(const OneButton_t* btn);
 bool OB_GetDebouncedValue(const OneButton_t* btn);

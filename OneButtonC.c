@@ -7,6 +7,11 @@
  * @brief Library for detecting button clicks, doubleclicks and long press
  * pattern on a single button.
  *
+ * CONCURRENCY NOTE: This library is designed for single-threaded usage.
+ * Do not call OB_Tick() from within callback functions. The library includes
+ * a reentrancy guard to prevent state corruption from recursive calls.
+ * If using in multi-threaded environment, external synchronization is required.
+ *
  * Original C++ Arduino code License and information given below. This code
  * is released under the same license.
  * @author Matthias Hertel, https://www.mathertel.de
@@ -46,6 +51,8 @@ void OB_Init(OneButton_t* btn) {
     // Initialize state values
     btn->state = OCS_INIT;
     btn->idleState = false;
+    btn->debounceEnabled = true;
+    btn->inTick = false;
 
     btn->buttonPressedLevel = 0;
     btn->debouncedLevel = false;
@@ -87,11 +94,14 @@ void OB_Setup(OneButton_t* btn, GPIO_TypeDef* port, uint16_t pin, bool activeLow
 bool OB_Debounce(OneButton_t* btn, bool btnActive) {
     btn->now = HAL_GetTick();  // current (relative) time in msecs.
 
-    if (btnActive && btn->debounce_ms < 0)
+    // If debounce is disabled, immediately return the active state
+    if (!btn->debounceEnabled) {
         btn->debouncedLevel = btnActive;
+        return btnActive;
+    }
 
     if (btn->lastDebounceLevel == btnActive) {
-        if (btn->now - btn->lastDebounceTime >= abs(btn->debounce_ms))
+        if (btn->now - btn->lastDebounceTime >= btn->debounce_ms)
             btn->debouncedLevel = btnActive;
     } else {
         btn->lastDebounceTime = btn->now;
@@ -101,33 +111,55 @@ bool OB_Debounce(OneButton_t* btn, bool btnActive) {
 }
 
 void OB_Tick(OneButton_t* btn) {
-    if (btn->pin != INVALID_PIN) {
-        bool btnActive = (HAL_GPIO_ReadPin(btn->port, btn->pin) == btn->buttonPressedLevel);
-        OB_FSM(btn, OB_Debounce(btn, btnActive));
-    }
+    if (!btn) return;
+    if (btn->pin == INVALID_PIN) return;
+    
+    // Reentrancy guard - do not allow recursive calls to OB_Tick
+    if (btn->inTick) return;
+    
+    btn->inTick = true;
+    bool btnActive = (HAL_GPIO_ReadPin(btn->port, btn->pin) == btn->buttonPressedLevel);
+    OB_FSM(btn, OB_Debounce(btn, btnActive));
+    btn->inTick = false;
 }
 
-void OB_SetDebounceMs(OneButton_t* btn, int16_t ms) {
+void OB_SetDebounceMs(OneButton_t* btn, uint16_t ms) {
+    if (!btn) return;
     btn->debounce_ms = ms;
 }
 
+void OB_SetDebounceEnabled(OneButton_t* btn, bool enabled) {
+    if (!btn) return;
+    btn->debounceEnabled = enabled;
+}
+
 void OB_SetClickMs(OneButton_t* btn, uint16_t ms) {
+    if (!btn) return;
     btn->click_ms = ms;
 }
 
 void OB_SetPressMs(OneButton_t* btn, uint16_t ms) {
+    if (!btn) return;
     btn->press_ms = ms;
 }
 
 void OB_SetIdleMs(OneButton_t* btn, uint16_t ms) {
+    if (!btn) return;
     btn->idle_ms = ms;
 }
 
 void OB_SetLongPressIntervalMs(OneButton_t* btn, uint16_t ms) {
+    if (!btn) return;
     btn->longPressIntervalMs = ms;
 }
 
+void OB_SetMaxClicks(OneButton_t* btn, uint16_t maxClicks) {
+    if (!btn) return;
+    btn->maxClicks = maxClicks;
+}
+
 void OB_Reset(OneButton_t* btn) {
+    if (!btn) return;
     btn->state = OCS_INIT;
     btn->nClicks = 0;
     btn->startTime = HAL_GetTick();
@@ -135,14 +167,17 @@ void OB_Reset(OneButton_t* btn) {
 }
 
 uint16_t OB_GetNumberClicks(const OneButton_t* btn) {
+    if (!btn) return 0;
     return btn->nClicks;
 }
 
 bool OB_IsIdle(const OneButton_t* btn) {
+    if (!btn) return false;
     return btn->state == OCS_INIT;
 }
 
 bool OB_IsLongPressed(const OneButton_t* btn) {
+    if (!btn) return false;
     return btn->state == OCS_PRESS;
 }
 
@@ -167,7 +202,7 @@ bool OB_AttachCallback(OneButton_t* btn, OneButtonEvent event, OneButtonCallback
 
         case OB_EV_MULTI_CLICK:
             btn->multiClickFunc = cb;
-            btn->maxClicks = btn->maxClicks > 100 ? btn->maxClicks : 100;
+            btn->maxClicks = btn->maxClicks > DEFAULT_MAX_CLICKS_MULTI ? btn->maxClicks : DEFAULT_MAX_CLICKS_MULTI;
             break;
 
         case OB_EV_LONG_PRESS_START:
@@ -194,19 +229,23 @@ bool OB_AttachCallback(OneButton_t* btn, OneButtonEvent event, OneButtonCallback
 
 }
 
-uint16_t OB_GetPressedMs(const OneButton_t* btn) {
+uint32_t OB_GetPressedMs(const OneButton_t* btn) {
+    if (!btn) return 0;
     return (btn->now - btn->startTime);
 }
 
 uint16_t OB_GetPin(const OneButton_t* btn) {
+    if (!btn) return INVALID_PIN;
     return btn->pin;
 }
 
 OneButtonState OB_GetState(const OneButton_t* btn) {
+    if (!btn) return OCS_INIT;
     return btn->state;
 }
 
 bool OB_GetDebouncedValue(const OneButton_t* btn) {
+    if (!btn) return false;
     return btn->debouncedLevel;
 }
 
@@ -223,7 +262,7 @@ void OB_FSM(OneButton_t* btn, bool activeLevel) {
     uint32_t waitTime = (btn->now - btn->startTime);
 
     switch (btn->state) {
-        case OCS_INIT: // on idle for idle_ms call idle function
+        case OCS_INIT: // on idle for idle_ms call idle function (fires once per inactivity period)
             if (!btn->idleState && (waitTime > btn->idle_ms)) {
                 if (btn->idleFunc) {
                     btn->idleState = true;
@@ -251,6 +290,8 @@ void OB_FSM(OneButton_t* btn, bool activeLevel) {
                 if (btn->longPressStartFunc) {
                     btn->longPressStartFunc();
                 }
+                // Initialize timing for during long press callback
+                btn->lastDuringLongPressTime = btn->now;
                 OB_NewState(btn, OCS_PRESS);
             }
             break;
@@ -289,7 +330,9 @@ void OB_FSM(OneButton_t* btn, bool activeLevel) {
                 OB_NewState(btn, OCS_PRESSEND);
 
             } else {
-                if ((btn->now - btn->lastDuringLongPressTime) >= btn->longPressIntervalMs) {
+                // Only call duringLongPressFunc if interval is > 0 (0 means disabled)
+                if (btn->longPressIntervalMs > 0 && 
+                    (btn->now - btn->lastDuringLongPressTime) >= btn->longPressIntervalMs) {
 
                     if (btn->duringLongPressFunc) {
                         btn->duringLongPressFunc();
