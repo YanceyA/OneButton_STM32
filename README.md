@@ -131,7 +131,7 @@ You may change these default values but be aware that when you specify too short
 
 Use `OB_SetDebounceEnabled(false)` to disable debouncing entirely for very fast response times. This replaces the previous negative debounce_ms usage.
 
-Note that long press is not activated by default as it will mask other button functions. The long press interval defaults to 0ms which disables repeated callbacks during long press.
+Note that long press is not activated by default as it will mask other button functions. The long press interval defaults to 0ms which disables repeated callbacks during long press. Multi-click callbacks honour the `OB_SetMaxClicks()` setting, so call the setter before `OB_AttachCallback()` if you need a stricter press count than the defaults.
 
 ### Additional Functions
 
