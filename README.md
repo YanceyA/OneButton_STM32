@@ -76,6 +76,8 @@ void B1_press() { // Basic function to count button presses
 OB_AttachCallback(&button1, OB_EV_PRESS, B1_press); // Attach the B1_press function to the OB_EV_PRESS event for button1.
 ```
 
+Temporarily ignore button activity by calling `OB_Disable()` on the instance; `OB_Enable()` re-arms event processing. Disabling a button automatically clears any in-progress state so no callbacks are emitted while disabled.
+
 ### Don't forget to `OB_Tick()`
 
 In order for `STM32_OneButton` to work correctly, you must call `OB_Tick()` on __each button instance__ within your main loop. If you're not getting any button events, this is probably why.
@@ -144,6 +146,7 @@ Note that long press is not activated by default as it will mask other button fu
 | `OB_GetPin(const OneButton_t* btn)` | Get the button pin                                                          |
 | `OB_GetState(const OneButton_t* btn)` | Get the button state                                                        |
 | `OB_GetDebouncedValue(const OneButton_t* btn)` | Get the debounced button value                                              |
+| `OB_Enable(OneButton_t* btn)` / `OB_Disable(OneButton_t* btn)` | Manually enable or disable event processing. `OB_Disable()` also resets the internal FSM so pending callbacks are discarded. |
 
 ### `OB_Reset()`
 

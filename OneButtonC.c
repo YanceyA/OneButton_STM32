@@ -78,6 +78,9 @@ void OB_Init(OneButton_t* btn) {
     btn->longPressStopFunc = NULL;
     btn->duringLongPressFunc = NULL;
     btn->idleFunc = NULL;
+
+    //enable button
+    btn->enabled = true;
 }
 
 void OB_Setup(OneButton_t* btn, GPIO_TypeDef* port, uint16_t pin, bool activeLow) {
@@ -113,11 +116,38 @@ bool OB_Debounce(OneButton_t* btn, bool btnActive) {
     return btn->debouncedLevel;
 }
 
+void OB_Disable(OneButton_t *btn)
+{
+    if (btn == NULL)
+    {
+        return;
+    }
+
+    btn->enabled = false;
+    OB_Reset(btn);
+}
+
+void OB_Enable(OneButton_t *btn)
+{
+    if (btn == NULL)
+    {
+        return;
+    }
+
+    btn->enabled = true;
+}
+
 void OB_Tick(OneButton_t* btn) {
     if (!btn) return;
     if (btn->pin == INVALID_PIN) return;
     if (!btn->port) return;
-    
+
+    //Ensure callbacks stay suppressed while disabled
+    if (!btn->enabled)
+    {
+        return;
+    }
+
     // Reentrancy guard - do not allow recursive calls to OB_Tick
     if (btn->inTick) return;
     
