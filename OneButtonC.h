@@ -87,6 +87,10 @@ typedef struct {
   OneButtonCallback longPressStopFunc;
   OneButtonCallback duringLongPressFunc;
   OneButtonCallback idleFunc;
+
+  //Button enabled flag
+  bool enabled;
+
 } OneButton_t;
 
 typedef enum {
@@ -133,5 +137,9 @@ bool OB_GetDebouncedValue(const OneButton_t* btn);
 // Internal state machine functions
 void OB_NewState(OneButton_t* btn, OneButtonState nextState);
 void OB_FSM(OneButton_t* btn, bool activeLevel);
+
+// Enable/Disable button
+void OB_Enable(OneButton_t *btn);
+void OB_Disable(OneButton_t *btn);
 
 #endif // ONEBUTTONC_H

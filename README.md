@@ -76,6 +76,8 @@ void B1_press() { // Basic function to count button presses
 OB_AttachCallback(&button1, OB_EV_PRESS, B1_press); // Attach the B1_press function to the OB_EV_PRESS event for button1.
 ```
 
+Temporarily ignore button activity by calling `OB_Disable()` on the instance; `OB_Enable()` re-arms event processing. Disabling a button automatically clears any in-progress state so no callbacks are emitted while disabled.
+
 ### Don't forget to `OB_Tick()`
 
 In order for `STM32_OneButton` to work correctly, you must call `OB_Tick()` on __each button instance__ within your main loop. If you're not getting any button events, this is probably why.
@@ -131,7 +133,7 @@ You may change these default values but be aware that when you specify too short
 
 Use `OB_SetDebounceEnabled(false)` to disable debouncing entirely for very fast response times. This replaces the previous negative debounce_ms usage.
 
-Note that long press is not activated by default as it will mask other button functions. The long press interval defaults to 0ms which disables repeated callbacks during long press.
+Note that long press is not activated by default as it will mask other button functions. The long press interval defaults to 0ms which disables repeated callbacks during long press. Multi-click callbacks honour the `OB_SetMaxClicks()` setting, so call the setter before `OB_AttachCallback()` if you need a stricter press count than the defaults.
 
 ### Additional Functions
 
@@ -144,6 +146,7 @@ Note that long press is not activated by default as it will mask other button fu
 | `OB_GetPin(const OneButton_t* btn)` | Get the button pin                                                          |
 | `OB_GetState(const OneButton_t* btn)` | Get the button state                                                        |
 | `OB_GetDebouncedValue(const OneButton_t* btn)` | Get the debounced button value                                              |
+| `OB_Enable(OneButton_t* btn)` / `OB_Disable(OneButton_t* btn)` | Manually enable or disable event processing. `OB_Disable()` also resets the internal FSM so pending callbacks are discarded. |
 
 ### `OB_Reset()`
 

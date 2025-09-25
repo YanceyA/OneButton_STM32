@@ -27,8 +27,6 @@
  */
 
 #include "OneButtonC.h"
-#include <stdlib.h>
-#include <string.h>
 
 // ----- Initialization and Default Values -----
 
@@ -37,6 +35,8 @@ void OB_Init(OneButton_t* btn) {
     if (!btn) {
         return;
     }
+
+    const uint32_t tick = HAL_GetTick();
 
     // Initialize hardware-related values
     btn->port = NULL;
@@ -57,10 +57,10 @@ void OB_Init(OneButton_t* btn) {
     btn->buttonPressedLevel = 0;
     btn->debouncedLevel = false;
     btn->lastDebounceLevel = false;
-    
-    btn->lastDebounceTime = 0;
-    btn->startTime = 0;
-    btn->now = 0;
+
+    btn->lastDebounceTime = tick;
+    btn->startTime = tick;
+    btn->now = tick;
 
     btn->nClicks = 0;
     btn->maxClicks = 1;
@@ -78,6 +78,9 @@ void OB_Init(OneButton_t* btn) {
     btn->longPressStopFunc = NULL;
     btn->duringLongPressFunc = NULL;
     btn->idleFunc = NULL;
+
+    //enable button
+    btn->enabled = true;
 }
 
 void OB_Setup(OneButton_t* btn, GPIO_TypeDef* port, uint16_t pin, bool activeLow) {
@@ -89,6 +92,9 @@ void OB_Setup(OneButton_t* btn, GPIO_TypeDef* port, uint16_t pin, bool activeLow
     btn->port = port;
     btn->pin = pin;
     btn->buttonPressedLevel = activeLow ? 0 : 1;
+    btn->startTime = HAL_GetTick();
+    btn->lastDebounceTime = btn->startTime;
+    btn->now = btn->startTime;
 }
 
 bool OB_Debounce(OneButton_t* btn, bool btnActive) {
@@ -110,10 +116,38 @@ bool OB_Debounce(OneButton_t* btn, bool btnActive) {
     return btn->debouncedLevel;
 }
 
+void OB_Disable(OneButton_t *btn)
+{
+    if (btn == NULL)
+    {
+        return;
+    }
+
+    btn->enabled = false;
+    OB_Reset(btn);
+}
+
+void OB_Enable(OneButton_t *btn)
+{
+    if (btn == NULL)
+    {
+        return;
+    }
+
+    btn->enabled = true;
+}
+
 void OB_Tick(OneButton_t* btn) {
     if (!btn) return;
     if (btn->pin == INVALID_PIN) return;
-    
+    if (!btn->port) return;
+
+    //Ensure callbacks stay suppressed while disabled
+    if (!btn->enabled)
+    {
+        return;
+    }
+
     // Reentrancy guard - do not allow recursive calls to OB_Tick
     if (btn->inTick) return;
     
@@ -155,7 +189,7 @@ void OB_SetLongPressIntervalMs(OneButton_t* btn, uint16_t ms) {
 
 void OB_SetMaxClicks(OneButton_t* btn, uint16_t maxClicks) {
     if (!btn) return;
-    btn->maxClicks = maxClicks;
+    btn->maxClicks = maxClicks ? maxClicks : 1;
 }
 
 void OB_Reset(OneButton_t* btn) {
@@ -163,6 +197,8 @@ void OB_Reset(OneButton_t* btn) {
     btn->state = OCS_INIT;
     btn->nClicks = 0;
     btn->startTime = HAL_GetTick();
+    btn->lastDebounceTime = btn->startTime;
+    btn->now = btn->startTime;
     btn->idleState = false;
 }
 
@@ -197,12 +233,16 @@ bool OB_AttachCallback(OneButton_t* btn, OneButtonEvent event, OneButtonCallback
 
         case OB_EV_DOUBLE_CLICK:
             btn->doubleClickFunc = cb;
-            btn->maxClicks = btn->maxClicks > 2 ? btn->maxClicks : 2;
+            if (btn->maxClicks < 2) {
+                btn->maxClicks = 2;
+            }
             break;
 
         case OB_EV_MULTI_CLICK:
             btn->multiClickFunc = cb;
-            btn->maxClicks = btn->maxClicks > DEFAULT_MAX_CLICKS_MULTI ? btn->maxClicks : DEFAULT_MAX_CLICKS_MULTI;
+            if (btn->maxClicks < 3) {
+                btn->maxClicks = DEFAULT_MAX_CLICKS_MULTI;
+            }
             break;
 
         case OB_EV_LONG_PRESS_START:
